@@ -135,11 +135,12 @@ struct DeviceControlView: View {
             }
             commandToSend = ""
         }
-        .onChange(of: bluetoothViewModel.connectedPeripheral) { newValue in
-            if newValue == nil && presentationMode.wrappedValue.isPresented {
-                if bluetoothViewModel.connectedPeripheral?.identifier != peripheral.identifier {
-                    presentationMode.wrappedValue.dismiss()
-                }
+        .onChange(of: bluetoothViewModel.connectedPeripheral) { oldValue, newValue in
+            // If this view is currently presented and the connected peripheral in the ViewModel
+            // is no longer the peripheral this view is specifically for, then dismiss.
+            // This covers cases where it becomes nil (disconnected) or changes to a different peripheral.
+            if presentationMode.wrappedValue.isPresented && newValue?.identifier != peripheral.identifier {
+                presentationMode.wrappedValue.dismiss()
             }
         }
     }

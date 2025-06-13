@@ -18,32 +18,8 @@ struct DeviceListView: View {
     var body: some View {
         NavigationView { // Or NavigationStack for iOS 16+
             VStack(spacing: 0) {
-                // Custom Top Bar
-                HStack {
-                    Spacer() // Pushes title to center
-                    Text("Bluetooth Devices")
-                        .font(.title3.bold()) // Updated font
-                        .foregroundColor(appPrimaryTextColor) // Updated color
-                        .padding(.leading, 48) // Offset for gear icon space, assuming icon is ~24 + padding
-                    Spacer()
-                    Button(action: {
-                        // Placeholder action for settings
-                        print("Settings button tapped")
-                    }) {
-                        Image(systemName: "gearshape.fill")
-                            .resizable()
-                            .frame(width: 24, height: 24)
-                            .foregroundColor(appPrimaryTextColor) // Updated color
-                    }
-                    .padding(.trailing, 16) // Standard padding for the icon
-                }
-                .padding(.horizontal) // Overall horizontal padding for the bar
-                .frame(height: 44) // Standard nav bar height approx
-                // Attempt to get safe area top inset dynamically.
-                // Note: Accessing UIApplication.shared.windows might be deprecated or behave differently in future iOS versions.
-                // A more robust way for safe area handling in complex scenarios might involve GeometryReader or specific safeAreaInset modifiers.
-                .padding(.top, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.windows.first?.safeAreaInsets.top ?? 0)
-                .background(appBackgroundColor) // Updated background
+                // Use the extracted CustomTopBarView
+                CustomTopBarView()
 
                 // "Discovered Devices" Section Title
                 HStack {
@@ -147,6 +123,36 @@ struct DeviceListView: View {
         // it should be instantiated in the App struct and passed via .environmentObject()
         // or as an @ObservedObject from an ancestor.
         // For this view being the root, @StateObject is appropriate for self-contained ownership.
+    }
+}
+
+// Helper view for the custom top bar
+private struct CustomTopBarView: View {
+    // These constants are defined at the file level in DeviceListView.swift
+    // and are accessible here as this struct is in the same file.
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Text("Bluetooth Devices")
+                .font(.title3.bold())
+                .foregroundColor(appPrimaryTextColor)
+                .padding(.leading, 48)
+            Spacer()
+            Button(action: {
+                print("Settings button tapped")
+            }) {
+                Image(systemName: "gearshape.fill")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(appPrimaryTextColor)
+            }
+            .padding(.trailing, 16)
+        }
+        .padding(.horizontal)
+        .frame(height: 44)
+        .padding(.top, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.windows.first?.safeAreaInsets.top ?? 0)
+        .background(appBackgroundColor)
     }
 }
 
