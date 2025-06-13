@@ -6,5 +6,7 @@
 	<string>This app uses Bluetooth to connect to and communicate with BLE devices like HM-10 modules.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>This app uses Bluetooth to connect to and communicate with BLE devices like HM-10 modules.</string>
+	<key>CFBundleDisplayName</key>
+	<string>Blue Console</string>
 </dict>
 </plist>
