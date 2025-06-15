@@ -32,7 +32,7 @@ class BluetoothViewModel: NSObject, ObservableObject, CBCentralManagerDelegate, 
 
     // MARK: - Private Properties
     /// The `CBCentralManager` instance that manages BLE operations like scanning and connecting.
-    private var centralManager: CBCentralManager?
+    internal var centralManager: CBCentralManager?
 
     // Standard HM-10 Service and Characteristic UUIDs (currently discovering all, so these are for reference)
     // let hm10ServiceUUID = CBUUID(string: "FFE0")
@@ -56,7 +56,7 @@ class BluetoothViewModel: NSObject, ObservableObject, CBCentralManagerDelegate, 
      */
     public func startScanning() {
         print("startScanning called")
-        guard centralManager?.state == .poweredOn else { // Or use self.isBluetoothPoweredOn
+        guard let central = centralManager, central.state == .poweredOn else {
             statusMessage = "Bluetooth is not powered on. Cannot start scan."
             print("Cannot scan, Bluetooth is not powered on.")
             return
@@ -69,7 +69,7 @@ class BluetoothViewModel: NSObject, ObservableObject, CBCentralManagerDelegate, 
         // `withServices: nil` means discover all types of peripherals.
         // `options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]` means we get one discovery event per peripheral,
         // even if it advertises multiple times. Set to true if continuous updates (e.g., for RSSI) are needed.
-        centralManager?.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
     /**
@@ -78,8 +78,10 @@ class BluetoothViewModel: NSObject, ObservableObject, CBCentralManagerDelegate, 
      */
     public func stopScanning() {
         print("stopScanning called")
-        if centralManager?.isScanning ?? false { // Check if the central manager is actually scanning.
-            centralManager?.stopScan()
+        guard let central = centralManager else { return }
+        
+        if central.isScanning { // Check if the central manager is actually scanning.
+            central.stopScan()
         }
         isScanning = false
         // Avoid overwriting status if it's related to connection state (e.g., "Connected to...")
@@ -121,7 +123,7 @@ class BluetoothViewModel: NSObject, ObservableObject, CBCentralManagerDelegate, 
      * The string is converted to UTF-8 data. The write type (with/without response)
      * is determined by the properties of the `writeCharacteristic`.
      */
-    func send(string: String) {
+    public func send(string: String) {
         // Ensure we have a connected peripheral and a characteristic to write to.
         guard let peripheral = connectedPeripheral, let characteristic = writeCharacteristic else {
             statusMessage = "Not connected or write characteristic not found."
@@ -455,9 +457,21 @@ class BluetoothViewModel: NSObject, ObservableObject, CBCentralManagerDelegate, 
         if let receivedString = String(data: data, encoding: .utf8) {
             let trimmedString = receivedString.trimmingCharacters(in: .whitespacesAndNewlines)
             print("Received string: \"\(trimmedString)\" from characteristic \(characteristic.uuid.uuidString) on \(peripheral.name ?? "Unknown Peripheral")")
+            
             // Update the UI on the main thread.
             DispatchQueue.main.async {
                 if !trimmedString.isEmpty { // Avoid adding empty or whitespace-only messages.
+                    // Check if HM-10 extension methods are available and call them if connected to HM-10
+                    if self.responds(to: NSSelectorFromString("isConnectedToHM10")) {
+                        // Use key-value coding to safely check the property
+                        if let isHM10 = self.value(forKey: "isConnectedToHM10") as? Bool, isHM10 {
+                            if self.responds(to: NSSelectorFromString("parseHM10Response:")) {
+                                // Use performSelector to safely call the method
+                                self.perform(NSSelectorFromString("parseHM10Response:"), with: trimmedString)
+                            }
+                        }
+                    }
+                    
                     self.receivedMessages.append("Received: \(trimmedString)")
                     // Optionally, limit the number of messages stored.
                     if self.receivedMessages.count > 100 {
