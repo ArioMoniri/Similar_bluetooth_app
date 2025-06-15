@@ -1,5 +1,8 @@
+
+// Test line - remove after testing
+
 import SwiftUI
-import CoreBluetooth // For CBPeripheral
+import CoreBluetooth
 
 // Color constants (approximations based on HTML mockup)
 private let appBackgroundColor = Color(UIColor(red: 0.97, green: 0.97, blue: 0.97, alpha: 1.0)) // #f8f8f8 (bg-neutral-50)
@@ -9,128 +12,43 @@ private let appTertiaryTextColor = Color(UIColor(red: 0.4, green: 0.4, blue: 0.4
 private let appButtonTextColor = Color.white // For text on dark buttons (text-neutral-50)
 private let appActiveScanButtonColor = Color.black // For the "Scan" button background
 
-
 struct DeviceListView: View {
     @StateObject var bluetoothViewModel = BluetoothViewModel()
-    // To be used for navigation to DeviceControlView
     @State private var selectedPeripheral: CBPeripheral?
 
     var body: some View {
-        NavigationView { // Or NavigationStack for iOS 16+
+        NavigationView {
             VStack(spacing: 0) {
-                // Use the extracted CustomTopBarView
-                CustomTopBarView()
-
-                // "Discovered Devices" Section Title
-                HStack {
-                    Text("Discovered Devices")
-                        .font(.title3.bold()) // Updated font
-                        .foregroundColor(appPrimaryTextColor) // Updated color
-                    Spacer()
-                }
-                .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16)) // px-4 pb-2 pt-4
-                .background(appBackgroundColor) // Updated background
-
-
-                // Device List
-                if bluetoothViewModel.discoveredPeripherals.isEmpty {
-                    Spacer() // Added Spacer
-                    if bluetoothViewModel.isScanning {
-                        Text("Scanning for devices...")
-                            .foregroundColor(appSecondaryTextColor)
-                            .padding()
-                    } else {
-                        Text("No devices found. Tap 'Scan' to discover.")
-                            .foregroundColor(appSecondaryTextColor)
-                            .padding()
-                    }
-                    Spacer() // Added Spacer
-                } else {
-                    List {
-                        ForEach(bluetoothViewModel.discoveredPeripherals, id: \.identifier) { peripheral in
-                            NavigationLink(
-                                destination: DeviceControlView(bluetoothViewModel: bluetoothViewModel, peripheral: peripheral),
-                            tag: peripheral,
-                            selection: $selectedPeripheral
-                        ) {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(peripheral.name ?? "Unknown Device")
-                                        .font(.body.weight(.medium)) // Updated font & weight
-                                        .foregroundColor(appPrimaryTextColor) // Updated color
-                                        .lineLimit(1)
-                                    Text("UUID: \(peripheral.identifier.uuidString)")
-                                        .font(.callout) // Updated font
-                                        .foregroundColor(appSecondaryTextColor) // Updated color
-                                        .lineLimit(2)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(appTertiaryTextColor) // Updated color for chevron
-                            }
-                            .padding(.symmetric(horizontal: 16, vertical: 8)) // Content padding within the row
-                            .frame(minHeight: 56) // min-h-[72px] approx (content 56 + padding 8+8 = 72)
-                        }
-                        .listRowBackground(appBackgroundColor) // Set background for each row
-                        .onTapGesture {
-                            if bluetoothViewModel.connectedPeripheral != peripheral {
-                                // Optional: Initiate connection early.
-                                // bluetoothViewModel.connect(to: peripheral)
-                            }
-                            self.selectedPeripheral = peripheral // Explicitly set to trigger navigation
-                        }
-                    }
-                }
-                .listStyle(PlainListStyle()) // Keep PlainListStyle
-                .scrollContentBackground(.hidden) // Necessary for List background color in iOS 16+
-                .background(appBackgroundColor) // Apply background to the List itself
-                } // End of Else for List
-
-
-                Spacer() // Pushes scan button to bottom
-
-                // Scan Button
-                Button(action: {
-                    if bluetoothViewModel.isScanning {
-                        bluetoothViewModel.stopScanning()
-                    } else {
-                        bluetoothViewModel.startScanning()
-                    }
-                }) {
-                    Text(bluetoothViewModel.isScanning ? "Stop Scan" : "Scan")
-                        .font(.headline) // text-base font-bold (matches HTML)
-                        .foregroundColor(appButtonTextColor) // Updated text color
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48) // h-12
-                        .background(bluetoothViewModel.isScanning ? Color.red : (bluetoothViewModel.isBluetoothPoweredOn ? appActiveScanButtonColor : Color.gray)) // Updated background logic
-                        .clipShape(Capsule()) // rounded-full
-                }
-                .padding(.horizontal, 16) // px-4
-                .padding(.bottom, 20) // Consistent bottom padding
-                // Disable if BT is off, unless already scanning (though scanning shouldn't be possible if BT is off after init)
-                .disabled(!bluetoothViewModel.isBluetoothPoweredOn && !bluetoothViewModel.isScanning)
+                // FIXED: Break down complex expression - Custom Top Bar
+                CustomTopBar()
+                
+                // FIXED: Break down complex expression - Section Title
+                SectionTitle()
+                
+                // FIXED: Break down complex expression - Device List or Empty State
+                DeviceListContent(
+                    bluetoothViewModel: bluetoothViewModel,
+                    selectedPeripheral: $selectedPeripheral
+                )
+                
+                Spacer()
+                
+                // FIXED: Break down complex expression - Scan Button
+                ScanButton(bluetoothViewModel: bluetoothViewModel)
             }
-            .background(appBackgroundColor.edgesIgnoringSafeArea(.all)) // Ensure overall background
-            .navigationBarHidden(true) // Keep custom navigation bar
+            .background(appBackgroundColor.edgesIgnoringSafeArea(.all))
+            .navigationBarHidden(true)
             .onAppear {
-                 // Ensure status message is reasonable for this view
-                 if !bluetoothViewModel.isScanning && bluetoothViewModel.isBluetoothPoweredOn {
+                if !bluetoothViewModel.isScanning && bluetoothViewModel.isBluetoothPoweredOn {
                     bluetoothViewModel.statusMessage = "Ready to scan."
-                 }
+                }
             }
         }
-        // If BluetoothViewModel needs to be shared with other top-level views,
-        // it should be instantiated in the App struct and passed via .environmentObject()
-        // or as an @ObservedObject from an ancestor.
-        // For this view being the root, @StateObject is appropriate for self-contained ownership.
     }
 }
 
-// Helper view for the custom top bar
-private struct CustomTopBarView: View {
-    // These constants are defined at the file level in DeviceListView.swift
-    // and are accessible here as this struct is in the same file.
-
+// FIXED: Extract CustomTopBar to separate view
+struct CustomTopBar: View {
     var body: some View {
         HStack {
             Spacer()
@@ -151,8 +69,162 @@ private struct CustomTopBarView: View {
         }
         .padding(.horizontal)
         .frame(height: 44)
-        .padding(.top, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.windows.first?.safeAreaInsets.top ?? 0)
+        .padding(.top, getSafeAreaTop())
         .background(appBackgroundColor)
+    }
+    
+    // FIXED: Extract safe area calculation to separate function
+    private func getSafeAreaTop() -> CGFloat {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first {
+            return window.safeAreaInsets.top
+        }
+        return 0
+    }
+}
+
+// FIXED: Extract SectionTitle to separate view
+struct SectionTitle: View {
+    var body: some View {
+        HStack {
+            Text("Discovered Devices")
+                .font(.title3.bold())
+                .foregroundColor(appPrimaryTextColor)
+            Spacer()
+        }
+        .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16))
+        .background(appBackgroundColor)
+    }
+}
+
+// FIXED: Extract DeviceListContent to separate view
+struct DeviceListContent: View {
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    @Binding var selectedPeripheral: CBPeripheral?
+    
+    var body: some View {
+        if bluetoothViewModel.discoveredPeripherals.isEmpty {
+            EmptyStateView(isScanning: bluetoothViewModel.isScanning)
+        } else {
+            DeviceList(
+                bluetoothViewModel: bluetoothViewModel,
+                selectedPeripheral: $selectedPeripheral
+            )
+        }
+    }
+}
+
+// FIXED: Extract EmptyStateView to separate view
+struct EmptyStateView: View {
+    let isScanning: Bool
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            if isScanning {
+                Text("Scanning for devices...")
+                    .foregroundColor(appSecondaryTextColor)
+                    .padding()
+            } else {
+                Text("No devices found. Tap 'Scan' to discover.")
+                    .foregroundColor(appSecondaryTextColor)
+                    .padding()
+            }
+            Spacer()
+        }
+    }
+}
+
+// FIXED: Extract DeviceList to separate view
+struct DeviceList: View {
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    @Binding var selectedPeripheral: CBPeripheral?
+    
+    var body: some View {
+        List {
+            ForEach(bluetoothViewModel.discoveredPeripherals, id: \.identifier) { peripheral in
+                // FIXED: Use the correct DeviceControlView name and structure
+                NavigationLink(
+                    destination: DeviceControlView(
+                        bluetoothViewModel: bluetoothViewModel,
+                        peripheral: peripheral
+                    ),
+                    tag: peripheral,
+                    selection: $selectedPeripheral
+                ) {
+                    DeviceRowView(peripheral: peripheral)
+                }
+                .listRowBackground(appBackgroundColor)
+                .onTapGesture {
+                    selectedPeripheral = peripheral
+                }
+            }
+        }
+        .listStyle(PlainListStyle())
+        .scrollContentBackground(.hidden)
+        .background(appBackgroundColor)
+    }
+}
+
+// FIXED: Extract DeviceRowView to separate view with corrected padding
+struct DeviceRowView: View {
+    let peripheral: CBPeripheral
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(peripheral.name ?? "Unknown Device")
+                    .font(.body.weight(.medium))
+                    .foregroundColor(appPrimaryTextColor)
+                    .lineLimit(1)
+                Text("UUID: \(peripheral.identifier.uuidString)")
+                    .font(.callout)
+                    .foregroundColor(appSecondaryTextColor)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .foregroundColor(appTertiaryTextColor)
+        }
+        // FIXED: Use explicit EdgeInsets instead of .symmetric
+        .padding(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .frame(minHeight: 56)
+    }
+}
+
+// FIXED: Extract ScanButton to separate view
+struct ScanButton: View {
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    
+    var body: some View {
+        Button(action: {
+            if bluetoothViewModel.isScanning {
+                bluetoothViewModel.stopScanning()
+            } else {
+                bluetoothViewModel.startScanning()
+            }
+        }) {
+            Text(bluetoothViewModel.isScanning ? "Stop Scan" : "Scan")
+                .font(.headline)
+                .foregroundColor(appButtonTextColor)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(scanButtonColor)
+                .clipShape(Capsule())
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 20)
+        .disabled(!bluetoothViewModel.isBluetoothPoweredOn && !bluetoothViewModel.isScanning)
+    }
+    
+    private var scanButtonColor: Color {
+        if bluetoothViewModel.isScanning {
+            return Color.red
+        } else if bluetoothViewModel.isBluetoothPoweredOn {
+            return appActiveScanButtonColor
+        } else {
+            return Color.gray
+        }
     }
 }
 
