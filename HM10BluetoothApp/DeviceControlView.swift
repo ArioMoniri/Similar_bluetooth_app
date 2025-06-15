@@ -1,176 +1,389 @@
 import SwiftUI
 import CoreBluetooth
 
-// Color constants (approximations based on HTML mockup)
-private let appBackgroundColor = Color(UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)) // bg-white
-private let appPrimaryTextColor = Color(UIColor(red: 0.08, green: 0.08, blue: 0.08, alpha: 1.0)) // #141414
-private let appSecondaryTextColor = Color(UIColor(red: 0.46, green: 0.46, blue: 0.46, alpha: 1.0)) // #757575
-private let textFieldBorderColor = Color(UIColor(red: 0.88, green: 0.88, blue: 0.88, alpha: 1.0)) // #e0e0e0
-private let disconnectButtonBackgroundColor = Color(UIColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)) // #f2f2f2
-
 struct DeviceControlView: View {
     @ObservedObject var bluetoothViewModel: BluetoothViewModel
-    var peripheral: CBPeripheral // The peripheral to control
-
+    @StateObject private var commandHistory = CommandHistoryManager()
+    var peripheral: CBPeripheral
+    
     @State private var commandToSend: String = ""
-    @Environment(\.presentationMode) var presentationMode // To dismiss the view on disconnect
-
+    @State private var showingCommandPicker = false
+    @Environment(\.dismiss) private var dismiss
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // "Device Info" Section Title
-            Text("Device Info")
-                .font(.title3.bold()) // Updated font
-                .foregroundColor(appPrimaryTextColor) // Updated color
-                .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16)) // Updated padding
-
-            // Name
-            InfoRow(label: "Name", value: peripheral.name ?? "N/A")
-
-            // UUID
-            InfoRow(label: "UUID", value: peripheral.identifier.uuidString)
-
-            // "Connection Status" Section Title
-            Text("Connection Status")
-                .font(.title3.bold()) // Updated font
-                .foregroundColor(appPrimaryTextColor) // Updated color
-                .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16)) // Updated padding
-
-            HStack {
-                Text(bluetoothViewModel.statusMessage)
-                    .font(.body) // Updated font
-                    .foregroundColor(appPrimaryTextColor) // Updated color
-                    .padding(.horizontal, 16) // Updated padding
-                Spacer()
+        VStack(spacing: 0) {
+            // Device Info Section
+            DeviceInfoSection(peripheral: peripheral, bluetoothViewModel: bluetoothViewModel)
+            
+            // Quick Commands Section (HM-10 specific)
+            QuickCommandsSection(bluetoothViewModel: bluetoothViewModel)
+            
+            // Custom Command Input
+            CustomCommandSection(
+                commandToSend: $commandToSend,
+                bluetoothViewModel: bluetoothViewModel,
+                commandHistory: commandHistory,
+                showingCommandPicker: $showingCommandPicker
+            )
+            
+            // Enhanced Message Console
+            EnhancedMessageConsole(bluetoothViewModel: bluetoothViewModel)
+            
+            Spacer()
+            
+            // Action Buttons
+            ActionButtonsSection(
+                commandToSend: $commandToSend,
+                bluetoothViewModel: bluetoothViewModel,
+                commandHistory: commandHistory
+            )
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(peripheral.name ?? "BLE Device")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            connectIfNeeded()
+        }
+        .onChange(of: bluetoothViewModel.connectedPeripheral) { oldValue, newValue in
+            if newValue == nil && oldValue?.identifier == peripheral.identifier {
+                dismiss()
             }
-            .frame(minHeight: 30)
-            .padding(.bottom, 16) // Updated padding
+        }
+    }
+    
+    private func connectIfNeeded() {
+        if bluetoothViewModel.connectedPeripheral != peripheral {
+            bluetoothViewModel.connect(to: peripheral)
+        }
+        commandToSend = ""
+    }
+}
 
-
-            // "Send Command" Section Title
-            Text("Send Command")
-                .font(.title3.bold()) // Updated font
-                .foregroundColor(appPrimaryTextColor) // Updated color
-                .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16)) // Updated padding
-
-            TextField("Enter command", text: $commandToSend)
-                .textFieldStyle(PlainTextFieldStyle()) // Apply PlainTextFieldStyle
-                .padding(15) // Inner padding for text
-                .frame(height: 50) // h-14 (56px) approx, border will add to this
-                .background(appBackgroundColor) // Explicit background for TextField
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(textFieldBorderColor)) // Border
-                .padding(.horizontal, 16) // Outer padding
-                .padding(.bottom, 16) // Outer padding
-
-
-            // "Received Messages" Section Title
-            Text("Received Messages")
-                .font(.title3.bold()) // Updated font
-                .foregroundColor(appPrimaryTextColor) // Updated color
-                .padding(EdgeInsets(top: 16, leading: 16, bottom: 8, trailing: 16)) // Updated padding
-
-            ScrollView {
-                VStack(alignment: .leading) {
-                    if bluetoothViewModel.receivedMessages.isEmpty {
-                        Text("No messages yet. Send a command to see responses.")
-                            .foregroundColor(appSecondaryTextColor) // Use an appropriate color
-                            .padding() // Add some padding
-                            .frame(maxWidth: .infinity, alignment: .center) // Center if desired
-                    } else {
-                        ForEach(bluetoothViewModel.receivedMessages.suffix(20), id: \.self) { message in
-                            Text(message)
-                                .font(.body) // Updated font
-                                .foregroundColor(appPrimaryTextColor) // Updated color
-                                .padding(.vertical, 1)
+// MARK: - Device Info Section
+struct DeviceInfoSection: View {
+    let peripheral: CBPeripheral
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Device Information")
+                .font(.title3.bold())
+                .foregroundColor(.primary)
+            
+            InfoCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    InfoRow(label: "Name", value: peripheral.name ?? "Unknown Device")
+                    InfoRow(label: "UUID", value: peripheral.identifier.uuidString)
+                    InfoRow(label: "Status", value: bluetoothViewModel.statusMessage)
+                    
+                    if bluetoothViewModel.isConnectedToHM10 {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("HM-10 Compatible")
+                                .font(.caption)
+                                .foregroundColor(.green)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16) // Updated padding
-            }
-            .frame(minHeight: 100, maxHeight: 200) // Updated frame
-            .padding(.bottom, 16) // Updated padding
-
-            Spacer() // Pushes buttons to the bottom
-
-            // Bottom Action Buttons
-            HStack(spacing: 10) {
-                Button(action: {
-                    if !commandToSend.isEmpty {
-                        bluetoothViewModel.send(string: commandToSend)
-                        commandToSend = "" // Clear after sending
-                    }
-                }) {
-                    Text("Send Command")
-                        .font(.caption.bold())
-                        .foregroundColor(Color.white) // Updated text color
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40) // h-10
-                        .background(Color.black)
-                        .clipShape(Capsule()) // Updated shape
-                }
-                .disabled(bluetoothViewModel.connectedPeripheral == nil || bluetoothViewModel.writeCharacteristic == nil || commandToSend.isEmpty)
-
-                Button(action: {
-                    bluetoothViewModel.disconnect()
-                }) {
-                    Text("Disconnect")
-                        .font(.caption.bold())
-                        .foregroundColor(appPrimaryTextColor) // Updated text color
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40) // h-10
-                        .background(disconnectButtonBackgroundColor) // Updated background
-                        .clipShape(Capsule()) // Updated shape
-                }
-                .disabled(bluetoothViewModel.connectedPeripheral == nil)
-            }
-            .padding(.horizontal, 16) // Updated padding
-            .padding(.bottom, 20)
-        }
-        .background(appBackgroundColor.edgesIgnoringSafeArea(.all)) // Overall background
-        .navigationTitle(peripheral.name ?? "Bluetooth Module")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            if bluetoothViewModel.connectedPeripheral != peripheral {
-                bluetoothViewModel.connect(to: peripheral)
-            }
-            commandToSend = ""
-        }
-        .onChange(of: bluetoothViewModel.connectedPeripheral) { oldValue, newValue in
-            // If this view is currently presented and the connected peripheral in the ViewModel
-            // is no longer the peripheral this view is specifically for, then dismiss.
-            // This covers cases where it becomes nil (disconnected) or changes to a different peripheral.
-            if presentationMode.wrappedValue.isPresented && newValue?.identifier != peripheral.identifier {
-                presentationMode.wrappedValue.dismiss()
             }
         }
+        .padding(.horizontal)
+        .padding(.top)
     }
 }
 
-// Helper view for consistent info rows
-struct InfoRow: View {
-    var label: String
-    var value: String
-
+// MARK: - Quick Commands Section
+struct QuickCommandsSection: View {
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    
+    private let quickCommands = [
+        ("Test", "AT"),
+        ("Role", "AT+ROLE?"),
+        ("Name", "AT+NAME?"),
+        ("Version", "AT+VERS?"),
+        ("Reset", "AT+RESET")
+    ]
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.body.weight(.medium))
-                .foregroundColor(appPrimaryTextColor) // Updated color
-            Text(value)
-                .font(.callout)
-                .foregroundColor(appSecondaryTextColor) // Updated color
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Commands")
+                .font(.title3.bold())
+                .foregroundColor(.primary)
+                .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(quickCommands, id: \.0) { command in
+                        QuickCommandButton(
+                            title: command.0,
+                            command: command.1,
+                            bluetoothViewModel: bluetoothViewModel
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
         }
-        .padding(.horizontal, 16) // Updated padding
-        .frame(minHeight: 36, alignment: .leading) // Updated frame
-        .padding(.vertical, 6)
+        .padding(.top)
     }
 }
 
-// Preview provider (remains challenging without full mock objects)
-struct DeviceControlView_Previews: PreviewProvider {
-    static var previews: some View {
+struct QuickCommandButton: View {
+    let title: String
+    let command: String
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    
+    var body: some View {
+        Button(action: {
+            bluetoothViewModel.sendATCommand(command)
+        }) {
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.caption.bold())
+                Text(command)
+                    .font(.caption2)
+                    .opacity(0.7)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+        }
+        .disabled(bluetoothViewModel.connectedPeripheral == nil || bluetoothViewModel.writeCharacteristic == nil)
+    }
+}
+
+// MARK: - Custom Command Section
+struct CustomCommandSection: View {
+    @Binding var commandToSend: String
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    @ObservedObject var commandHistory: CommandHistoryManager
+    @Binding var showingCommandPicker: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Custom Command")
+                    .font(.title3.bold())
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Button("History") {
+                    showingCommandPicker = true
+                }
+                .font(.caption)
+                .disabled(commandHistory.commandHistory.isEmpty)
+            }
+            .padding(.horizontal)
+            
+            HStack {
+                TextField("Enter AT command or message", text: $commandToSend)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .onSubmit {
+                        sendCommand()
+                    }
+                
+                Button("Send") {
+                    sendCommand()
+                }
+                .disabled(commandToSend.isEmpty || bluetoothViewModel.connectedPeripheral == nil)
+            }
+            .padding(.horizontal)
+        }
+        .padding(.top)
+        .sheet(isPresented: $showingCommandPicker) {
+            CommandHistoryView(
+                commandHistory: commandHistory,
+                selectedCommand: $commandToSend
+            )
+        }
+    }
+    
+    private func sendCommand() {
+        guard !commandToSend.isEmpty else { return }
+        
+        commandHistory.addCommand(commandToSend)
+        bluetoothViewModel.send(string: commandToSend)
+        commandToSend = ""
+    }
+}
+
+// MARK: - Enhanced Message Console
+struct EnhancedMessageConsole: View {
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Console Output")
+                    .font(.title3.bold())
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                Button("Clear") {
+                    bluetoothViewModel.receivedMessages.removeAll()
+                }
+                .font(.caption)
+                .disabled(bluetoothViewModel.receivedMessages.isEmpty)
+            }
+            .padding(.horizontal)
+            
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    if bluetoothViewModel.receivedMessages.isEmpty {
+                        Text("Console output will appear here...")
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    } else {
+                        ForEach(Array(bluetoothViewModel.receivedMessages.enumerated()), id: \.offset) { index, message in
+                            ConsoleMessageRow(message: message, index: index)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(maxHeight: 200)
+            .background(Color(.systemBackground))
+            .cornerRadius(8)
+            .padding(.horizontal)
+        }
+        .padding(.top)
+    }
+}
+
+struct ConsoleMessageRow: View {
+    let message: String
+    let index: Int
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("\(index + 1).")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .frame(minWidth: 20, alignment: .trailing)
+            
+            Text(message)
+                .font(.caption)
+                .foregroundColor(messageColor)
+                .textSelection(.enabled)
+            
+            Spacer()
+        }
+        .padding(.vertical, 2)
+    }
+    
+    private var messageColor: Color {
+        let parsedResponse = HM10ResponseParser.parseResponse(message)
+        return parsedResponse.type.color
+    }
+}
+
+// MARK: - Action Buttons Section
+struct ActionButtonsSection: View {
+    @Binding var commandToSend: String
+    @ObservedObject var bluetoothViewModel: BluetoothViewModel
+    @ObservedObject var commandHistory: CommandHistoryManager
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Button("Disconnect") {
+                bluetoothViewModel.disconnect()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(bluetoothViewModel.connectedPeripheral == nil)
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 20)
+    }
+}
+
+// MARK: - Supporting Views
+struct InfoCard<Content: View>: View {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    var body: some View {
+        content
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(radius: 1)
+    }
+}
+
+struct InfoRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 60, alignment: .leading)
+            
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.primary)
+                .lineLimit(2)
+            
+            Spacer()
+        }
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color(.systemGray5))
+            .foregroundColor(.primary)
+            .cornerRadius(8)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+    }
+}
+
+// MARK: - Command History View
+struct CommandHistoryView: View {
+    @ObservedObject var commandHistory: CommandHistoryManager
+    @Binding var selectedCommand: String
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
         NavigationView {
-            Text("DeviceControlView Preview (Complex to fully mock)")
+            List {
+                ForEach(commandHistory.commandHistory, id: \.self) { command in
+                    Button(action: {
+                        selectedCommand = command
+                        dismiss()
+                    }) {
+                        Text(command)
+                            .foregroundColor(.primary)
+                    }
+                }
+                .onDelete { indexSet in
+                    commandHistory.commandHistory.remove(atOffsets: indexSet)
+                }
+            }
+            .navigationTitle("Command History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }
